@@ -1,0 +1,128 @@
+
+# encoding: utf-8
+
+SetScriptVersion(
+    Version="26.1"
+)
+
+Reset()
+
+print("================================================")
+print("ANSYS AI WORKBENCH JOURNAL")
+print("================================================")
+
+system = GetTemplate(
+    TemplateName="Static Structural",
+    Solver="ANSYS"
+).CreateSystem()
+
+print(
+    "STATIC STRUCTURAL SYSTEM CREATED"
+)
+
+# ========================================================
+# ENGINEERING DATA
+# ========================================================
+
+engineering_data = system.GetContainer(
+    ComponentName="Engineering Data"
+)
+
+try:
+
+    engineering_data.ImportMaterial(
+        Name="Structural Steel",
+        Source="General_Materials.xml"
+    )
+
+    print(
+        "MATERIAL IMPORTED:",
+        "Structural Steel"
+    )
+
+except Exception as e:
+
+    print(
+        "MATERIAL IMPORT WARNING:",
+        e
+    )
+
+# ========================================================
+# GEOMETRY
+# ========================================================
+
+geometry_container = system.GetContainer(
+    ComponentName="Geometry"
+)
+
+geometry_container.Edit(
+    IsSpaceClaimGeometry=True
+)
+
+geometry_container.SendCommand(
+    Language="Python",
+    Command='\np1 = Point.Create(\n    MM(0),\n    MM(0),\n    MM(0)\n)\n\np2 = Point.Create(\n    MM(300.0),\n    MM(0),\n    MM(0)\n)\n\np3 = Point.Create(\n    MM(0),\n    MM(12.5),\n    MM(0)\n)\n\nresult = CylinderBody.Create(\n    p1,\n    p2,\n    p3,\n    ExtrudeType.ForceIndependent\n)\n\nprint("CYLINDER CREATED")\n'
+)
+
+geometry_container.Exit()
+
+system.Refresh()
+
+print(
+    "GEOMETRY CREATED"
+)
+
+# ========================================================
+# MECHANICAL
+# ========================================================
+
+model_container = system.GetContainer(
+    ComponentName="Model"
+)
+
+print(
+    "OPENING MECHANICAL..."
+)
+
+model_container.Edit(
+    Interactive=False
+)
+
+print(
+    "MECHANICAL OPENED"
+)
+
+model_container.SendCommand(
+    Language="Python",
+    Command='\n# encoding: utf-8\n\nimport traceback\n\nRESULTS_FILE = r"C:/ANSYS_AI/results/analysis_results.txt"\nSTATUS_FILE = r"C:/ANSYS_AI/results/simulation_status.txt"\nERROR_FILE = r"C:/ANSYS_AI/results/simulation_error.txt"\n\ntry:\n\n    print("================================================")\n    print("ANSYS AI MECHANICAL SCRIPT")\n    print("================================================")\n\n    model = ExtAPI.DataModel.Project.Model\n\n    if len(model.Analyses) == 0:\n        raise Exception(\n            "No analysis exists in Mechanical."\n        )\n\n    analysis = model.Analyses[0]\n\n    print(\n        "ANALYSIS:",\n        analysis.Name\n    )\n\n    # IMPORTANT:\n    # Get the real Mechanical Body object.\n    # Do not use GeoBodyWrapper as the body.\n\n    geometry = model.Geometry\n\n    parts = geometry.GetChildren(\n        DataModelObjectCategory.Part,\n        False\n    )\n\n    if len(parts) == 0:\n        raise Exception(\n            "No geometry part found."\n        )\n\n    bodies = parts[0].GetChildren(\n        DataModelObjectCategory.Body,\n        False\n    )\n\n    if len(bodies) == 0:\n        raise Exception(\n            "No Mechanical body found."\n        )\n\n    body = bodies[0]\n\n    print(\n        "MECHANICAL BODY:",\n        body.Name\n    )\n\n    print(\n        "BODY ID:",\n        body.Id\n    )\n\n    # ========================================================\n    # MATERIAL\n    # ========================================================\n\n    body.Material = "Structural Steel"\n\n    print(\n        "MATERIAL ASSIGNED:",\n        body.Material\n    )\n\n    # ========================================================\n    # FACES\n    # ========================================================\n\n    faces = body.Faces\n\n    if len(faces) == 0:\n        raise Exception(\n            "No geometry faces found."\n        )\n\n    fixed_face = None\n    load_face = None\n\n    min_x = 1.0e30\n    max_x = -1.0e30\n\n    for face in faces:\n\n        try:\n            x = face.Centroid[0]\n        except:\n            continue\n\n        if x < min_x:\n            min_x = x\n            fixed_face = face\n\n        if x > max_x:\n            max_x = x\n            load_face = face\n\n    if fixed_face is None:\n        raise Exception(\n            "Could not identify fixed end face."\n        )\n\n    if load_face is None:\n        raise Exception(\n            "Could not identify load end face."\n        )\n\n    print(\n        "FIXED FACE ID:",\n        fixed_face.Id\n    )\n\n    print(\n        "LOAD FACE ID:",\n        load_face.Id\n    )\n\n    # ========================================================\n    # REFERENCE TEMPERATURE\n    # ========================================================\n\n    body.UseReferenceTemperatureByBody = True\n\n    body.ReferenceTemperatureValue = Quantity(\n        "25.0 [C]"\n    )\n\n    print(\n        "REFERENCE TEMPERATURE:",\n        25.0,\n        "C"\n    )\n\n    # ========================================================\n    # TEMPERATURE LOAD\n    # ========================================================\n\n    body_selection = (\n        ExtAPI.SelectionManager.CreateSelectionInfo(\n            SelectionTypeEnum.GeometryEntities\n        )\n    )\n\n    body_selection.Ids = [\n        body.GetGeoBody().Id\n    ]\n\n    temperature_load = analysis.AddTemperature()\n\n    temperature_load.Location = body_selection\n\n    temperature_load.Magnitude.Output.SetDiscreteValue(\n        0,\n        Quantity("100.0 [C]")\n    )\n\n    print(\n        "TEMPERATURE LOAD:",\n        100.0,\n        "C"\n    )\n\n    # ========================================================\n    # FIXED SUPPORT\n    # ========================================================\n\n    \nfixed_selection = ExtAPI.SelectionManager.CreateSelectionInfo(\n    SelectionTypeEnum.GeometryEntities\n)\n\nfixed_selection.Ids = [\n    fixed_face.Id\n]\n\nfixed_support_object = analysis.AddFixedSupport()\n\nfixed_support_object.Location = fixed_selection\n\nprint("FIXED SUPPORT CREATED")\n\n\n    # ========================================================\n    # FORCE\n    # ========================================================\n\n    \nprint("MECHANICAL FORCE DISABLED")\n\n\n    # ========================================================\n    # MESH\n    # ========================================================\n\n    mesh = model.Mesh\n\n    mesh.ElementSize = Quantity(\n        "5.0 [mm]"\n    )\n\n    print(\n        "GENERATING MESH..."\n    )\n\n    mesh.GenerateMesh()\n\n    print(\n        "MESH GENERATED"\n    )\n\n    # ========================================================\n    # RESULTS\n    # ========================================================\n\n    solution = analysis.Solution\n\n    total_deformation = (\n        solution.AddTotalDeformation()\n    )\n\n    equivalent_stress = (\n        solution.AddEquivalentStress()\n    )\n\n    print(\n        "RESULT OBJECTS CREATED"\n    )\n\n    # ========================================================\n    # SOLVE\n    # ========================================================\n\n    print(\n        "STARTING ANSYS SOLVE..."\n    )\n\n    analysis.Solve(True)\n\n    print(\n        "ANSYS SOLVE COMPLETED"\n    )\n\n    # ========================================================\n    # EVALUATE\n    # ========================================================\n\n    total_deformation.EvaluateAllResults()\n\n    equivalent_stress.EvaluateAllResults()\n\n    try:\n\n        max_deformation = (\n            total_deformation.Maximum.Value\n        )\n\n    except:\n\n        max_deformation = "Unavailable"\n\n    try:\n\n        max_stress = (\n            equivalent_stress.Maximum.Value\n        )\n\n    except:\n\n        max_stress = "Unavailable"\n\n    # ========================================================\n    # WRITE RESULTS\n    # ========================================================\n\n    with open(\n        RESULTS_FILE,\n        "w",\n        encoding="utf-8"\n    ) as result_file:\n\n        result_file.write(\n            "ANSYS AI AUTOMATION RESULTS\\n"\n        )\n\n        result_file.write(\n            "===========================\\n"\n        )\n\n        result_file.write(\n            "Status: COMPLETED\\n"\n        )\n\n        result_file.write(\n            "Geometry Shape: Cylinder\\n"\n        )\n\n        result_file.write(\n            "Length: 300.0 mm\\n"\n        )\n\n        result_file.write(\n            "Diameter: 25.0 mm\\n"\n        )\n\n        result_file.write(\n            "Width: 0.0 mm\\n"\n        )\n\n        result_file.write(\n            "Height: 0.0 mm\\n"\n        )\n\n        result_file.write(\n            "Material: Structural Steel\\n"\n        )\n\n        result_file.write(\n            "Analysis: Static Structural with Thermal Load\\n"\n        )\n\n        result_file.write(\n            "Fixed Support: True\\n"\n        )\n\n        result_file.write(\n            "Temperature: 100.0 C\\n"\n        )\n\n        result_file.write(\n            "Reference Temperature: 25.0 C\\n"\n        )\n\n        result_file.write(\n            "Mechanical Load: 0.0 N\\n"\n        )\n\n        result_file.write(\n            "Load Direction: Z\\n"\n        )\n\n        result_file.write(\n            "Mesh Size: 5.0 mm\\n"\n        )\n\n        result_file.write(\n            "Maximum Total Deformation: "\n            + str(max_deformation)\n            + "\\n"\n        )\n\n        result_file.write(\n            "Maximum Equivalent Stress: "\n            + str(max_stress)\n            + "\\n"\n        )\n\n    ExtAPI.DataModel.Project.Save()\n\n    with open(\n        STATUS_FILE,\n        "w",\n        encoding="utf-8"\n    ) as status_file:\n\n        status_file.write(\n            "SUCCESS"\n        )\n\n    print(\n        "RESULTS SAVED"\n    )\n\nexcept Exception as error:\n\n    error_text = (\n        "MECHANICAL AUTOMATION ERROR\\n\\n"\n        + type(error).__name__\n        + ": "\n        + str(error)\n        + "\\n\\n"\n        + traceback.format_exc()\n    )\n\n    try:\n\n        with open(\n            ERROR_FILE,\n            "w",\n            encoding="utf-8"\n        ) as error_file:\n\n            error_file.write(\n                error_text\n            )\n\n    except:\n        pass\n\n    try:\n\n        with open(\n            STATUS_FILE,\n            "w",\n            encoding="utf-8"\n        ) as status_file:\n\n            status_file.write(\n                "FAILED"\n            )\n\n    except:\n        pass\n\n    print(\n        error_text\n    )\n\n    raise\n'
+)
+
+print(
+    "MECHANICAL SCRIPT FINISHED"
+)
+
+model_container.Exit(
+    SaveDatabase=True
+)
+
+print(
+    "MECHANICAL CLOSED"
+)
+
+# ========================================================
+# SAVE PROJECT
+# ========================================================
+
+Save(
+    FilePath="C:/ANSYS_AI/results/ansys_ai_dynamic.wbpj",
+    Overwrite=True
+)
+
+print(
+    "PROJECT SAVED:",
+    "C:/ANSYS_AI/results/ansys_ai_dynamic.wbpj"
+)
+
+print(
+    "WORKBENCH JOURNAL FINISHED"
+)

@@ -1,0 +1,230 @@
+# encoding: utf-8
+
+import time
+import os
+
+print("==========================================")
+print("ANSYS AI CANTILEVER BEAM")
+print("==========================================")
+
+RESULTS_DIR = r"C:/ANSYS_AI/results"
+STATUS_FILE = r"C:/ANSYS_AI/results/simulation_status.txt"
+ERROR_FILE = r"C:/ANSYS_AI/results/simulation_error.txt"
+MECH_SCRIPT = r"C:/ANSYS_AI/scripts/cantilever_mechanical.py"
+PROJECT_FILE = r"C:/ANSYS_AI/results/cantilever_beam.wbpj"
+
+# ------------------------------------------------------
+# REMOVE OLD STATUS FILES
+# ------------------------------------------------------
+
+try:
+    os.remove(STATUS_FILE)
+except:
+    pass
+
+try:
+    os.remove(ERROR_FILE)
+except:
+    pass
+
+print("OLD STATUS FILES CLEARED")
+
+# ------------------------------------------------------
+# RESET
+# ------------------------------------------------------
+
+Reset()
+
+print("WORKBENCH RESET")
+
+# ------------------------------------------------------
+# CREATE STATIC STRUCTURAL SYSTEM
+# ------------------------------------------------------
+
+system = GetTemplate(
+    TemplateName="Static Structural",
+    Solver="ANSYS"
+).CreateSystem()
+
+print("STATIC STRUCTURAL SYSTEM CREATED")
+
+# ------------------------------------------------------
+# GEOMETRY
+# ------------------------------------------------------
+
+geometry = system.GetContainer(
+    ComponentName="Geometry"
+)
+
+print("OPENING SPACECLAIM")
+
+geometry.Edit(
+    IsSpaceClaimGeometry=True
+)
+
+time.sleep(5)
+
+print("CREATING BEAM")
+
+geometry.SendCommand(
+    Language="Python",
+    Command=r"""
+p1 = Point.Create(
+    MM(0),
+    MM(0),
+    MM(0)
+)
+
+p2 = Point.Create(
+    MM(100),
+    MM(20),
+    MM(20)
+)
+
+result = BlockBody.Create(
+    p1,
+    p2,
+    ExtrudeType.ForceIndependent
+)
+
+print("CANTILEVER BEAM CREATED")
+"""
+)
+
+time.sleep(5)
+
+geometry.Exit()
+
+print("SPACECLAIM CLOSED")
+
+# ------------------------------------------------------
+# REFRESH
+# ------------------------------------------------------
+
+system.Refresh()
+
+time.sleep(5)
+
+print("SYSTEM REFRESHED")
+
+# ------------------------------------------------------
+# OPEN MECHANICAL
+# ------------------------------------------------------
+
+model = system.GetContainer(
+    ComponentName="Model"
+)
+
+print("OPENING MECHANICAL")
+
+model.Edit()
+
+print("MECHANICAL OPENED")
+
+# Give Mechanical enough time to initialize
+time.sleep(15)
+
+print("MECHANICAL READY")
+
+# ------------------------------------------------------
+# SEND MECHANICAL SCRIPT
+# ------------------------------------------------------
+
+print("SENDING MECHANICAL SCRIPT")
+
+command = (
+    "execfile(r'C:\\ANSYS_AI\\scripts\\cantilever_mechanical.py')"
+)
+
+model.SendCommand(
+    Language="Python",
+    Command=command
+)
+
+print("MECHANICAL SCRIPT SENT")
+
+# ------------------------------------------------------
+# WAIT FOR RESULT
+# ------------------------------------------------------
+
+print("WAITING FOR SIMULATION")
+
+timeout = 300
+elapsed = 0
+
+while elapsed < timeout:
+
+    if os.path.exists(STATUS_FILE):
+
+        try:
+
+            f = open(
+                STATUS_FILE,
+                "r"
+            )
+
+            status = f.read().strip()
+
+            f.close()
+
+            print(
+                "SIMULATION STATUS:",
+                status
+            )
+
+            if status == "SUCCESS":
+
+                print(
+                    "SIMULATION COMPLETED"
+                )
+
+                break
+
+            if status == "FAILED":
+
+                print(
+                    "SIMULATION FAILED"
+                )
+
+                break
+
+        except Exception as e:
+
+            print(
+                "STATUS READ WARNING:",
+                str(e)
+            )
+
+    time.sleep(2)
+
+    elapsed += 2
+
+# ------------------------------------------------------
+# SAVE PROJECT
+# ------------------------------------------------------
+
+print("SAVING PROJECT")
+
+try:
+
+    Save(
+        FilePath=PROJECT_FILE,
+        Overwrite=True
+    )
+
+    print("PROJECT SAVED")
+
+except Exception as e:
+
+    print(
+        "PROJECT SAVE WARNING:",
+        str(e)
+    )
+
+# ------------------------------------------------------
+# FINISH
+# ------------------------------------------------------
+
+print("==========================================")
+print("WORKBENCH JOURNAL FINISHED")
+print("==========================================")

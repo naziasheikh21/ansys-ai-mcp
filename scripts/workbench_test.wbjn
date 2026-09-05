@@ -1,0 +1,308 @@
+# encoding: utf-8
+
+SetScriptVersion(Version="26.1")
+
+Reset()
+
+# ============================================================
+# 1. CREATE STATIC STRUCTURAL SYSTEM
+# ============================================================
+
+system = GetTemplate(
+    TemplateName="Static Structural",
+    Solver="ANSYS"
+).CreateSystem()
+
+
+# ============================================================
+# 2. IMPORT STRUCTURAL STEEL
+# ============================================================
+
+engineeringData = system.GetContainer(
+    ComponentName="Engineering Data"
+)
+
+structuralSteel = engineeringData.ImportMaterial(
+    Name="Structural Steel",
+    Source="General_Materials.xml"
+)
+
+print("Structural Steel imported.")
+
+
+# ============================================================
+# 3. CREATE 100 x 20 x 20 mm BEAM
+# ============================================================
+
+geometry = system.GetContainer(
+    ComponentName="Geometry"
+)
+
+geometry.Edit(
+    IsSpaceClaimGeometry=True
+)
+
+geometry.SendCommand(
+    Language="Python",
+    Command="""
+result = BlockBody.Create(
+    Point.Create(MM(0), MM(0), MM(0)),
+    Point.Create(MM(100), MM(20), MM(20)),
+    ExtrudeType.ForceIndependent
+)
+"""
+)
+
+geometry.Exit()
+
+system.Refresh()
+
+
+# ============================================================
+# 4. OPEN MECHANICAL
+# ============================================================
+
+model = system.GetContainer(
+    ComponentName="Model"
+)
+
+model.Edit(
+    Interactive=True
+)
+
+
+# ============================================================
+# 5. RUN COMPLETE MECHANICAL AUTOMATION
+# ============================================================
+
+model.SendCommand(
+    Language="Python",
+    Command="""
+
+# ------------------------------------------------------------
+# Get model and analysis
+# ------------------------------------------------------------
+
+model = ExtAPI.DataModel.Project.Model
+
+analysis = model.Analyses[0]
+
+print("Mechanical automation started.")
+
+
+# ------------------------------------------------------------
+# Assign Structural Steel
+# ------------------------------------------------------------
+
+try:
+    model.Geometry.Children[0].Children[0].Material = "Structural Steel"
+except:
+    try:
+        model.Geometry.SolidBodies[0].Material = "Structural Steel"
+    except:
+        print("Material assignment requires manual verification.")
+
+
+# ------------------------------------------------------------
+# Find beam faces automatically
+# ------------------------------------------------------------
+
+geo = ExtAPI.DataModel.GeoData
+
+body = geo.Assemblies[0].Parts[0].Bodies[0]
+
+faces = body.Faces
+
+fixed_face = None
+load_face = None
+
+min_x = 1.0e30
+max_x = -1.0e30
+
+for face in faces:
+
+    x = face.Centroid[0]
+
+    if x < min_x:
+        min_x = x
+        fixed_face = face
+
+    if x > max_x:
+        max_x = x
+        load_face = face
+
+
+print("Fixed face ID:", fixed_face.Id)
+print("Load face ID:", load_face.Id)
+
+
+# ------------------------------------------------------------
+# Create fixed support
+# ------------------------------------------------------------
+
+fixed_selection = ExtAPI.SelectionManager.CreateSelectionInfo(
+    SelectionTypeEnum.GeometryEntities
+)
+
+fixed_selection.Ids = [fixed_face.Id]
+
+fixed_support = analysis.AddFixedSupport()
+
+fixed_support.Location = fixed_selection
+
+
+# ------------------------------------------------------------
+# Create 100 N downward force
+# ------------------------------------------------------------
+
+force_selection = ExtAPI.SelectionManager.CreateSelectionInfo(
+    SelectionTypeEnum.GeometryEntities
+)
+
+force_selection.Ids = [load_face.Id]
+
+force = analysis.AddForce()
+
+force.Location = force_selection
+
+force.DefineBy = LoadDefineBy.Components
+
+force.ZComponent.Output.DiscreteValues = [
+    Quantity("-100 [N]")
+]
+
+
+# ------------------------------------------------------------
+# Mesh
+# ------------------------------------------------------------
+
+mesh = model.Mesh
+
+mesh.ElementSize = Quantity("5 [mm]")
+
+mesh.GenerateMesh()
+
+print("Mesh generated.")
+
+
+# ------------------------------------------------------------
+# Add Total Deformation
+# ------------------------------------------------------------
+
+solution = analysis.Solution
+
+total_deformation = solution.AddTotalDeformation()
+
+
+# ------------------------------------------------------------
+# Add Equivalent Stress
+# ------------------------------------------------------------
+
+equivalent_stress = solution.AddEquivalentStress()
+
+
+# ------------------------------------------------------------
+# Solve
+# ------------------------------------------------------------
+
+print("Starting solve...")
+
+analysis.Solve(True)
+
+print("Solve completed.")
+
+
+# ------------------------------------------------------------
+# Evaluate results
+# ------------------------------------------------------------
+
+total_deformation.EvaluateAllResults()
+
+equivalent_stress.EvaluateAllResults()
+
+
+print(
+    "Maximum Total Deformation =",
+    total_deformation.Maximum.Value
+)
+
+print(
+    "Maximum Equivalent Stress =",
+    equivalent_stress.Maximum.Value
+)
+
+
+# ------------------------------------------------------------
+# Save result information
+# ------------------------------------------------------------
+
+with open(
+    "C:/ANSYS_AI/results/analysis_results.txt",
+    "w"
+) as result_file:
+
+    result_file.write(
+        "ANSYS AI AUTOMATION RESULTS\\n"
+    )
+
+    result_file.write(
+        "===========================\\n"
+    )
+
+    result_file.write(
+        "Model: Cantilever Beam\\n"
+    )
+
+    result_file.write(
+        "Dimensions: 100 x 20 x 20 mm\\n"
+    )
+
+    result_file.write(
+        "Material: Structural Steel\\n"
+    )
+
+    result_file.write(
+        "Applied Load: 100 N\\n"
+    )
+
+    result_file.write(
+        "Mesh Size: 5 mm\\n"
+    )
+
+    result_file.write(
+        "Maximum Total Deformation: "
+        + str(total_deformation.Maximum.Value)
+        + "\\n"
+    )
+
+    result_file.write(
+        "Maximum Equivalent Stress: "
+        + str(equivalent_stress.Maximum.Value)
+        + "\\n"
+    )
+
+print("Results saved.")
+
+
+# ------------------------------------------------------------
+# Save Mechanical project
+# ------------------------------------------------------------
+
+ExtAPI.DataModel.Project.Save()
+
+print("ANSYS automation completed successfully.")
+
+"""
+)
+
+
+# ============================================================
+# 6. SAVE WORKBENCH PROJECT
+# ============================================================
+
+Save(
+    FilePath="C:/ANSYS_AI/results/cantilever_beam_complete.wbpj",
+    Overwrite=True
+)
+
+print("Complete ANSYS automation finished.")

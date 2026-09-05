@@ -1,0 +1,12 @@
+{
+    "shape": "rectangular plate",
+    "length_mm": 100.0,
+    "diameter_mm": 0,
+    "width_mm": 20.0,
+    "height_mm": 5.0,
+    "material": "Structural Steel",
+    "load_n": 100.0,
+    "load_direction": "X",
+    "mesh_size_mm": 5,
+    "analysis_type": "Static Structural"
+}

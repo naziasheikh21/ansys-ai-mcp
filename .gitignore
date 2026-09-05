@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+*.pyc
+results/
+*.wbpj
+*.dsdb
+*.lock
+*.lck
+.env

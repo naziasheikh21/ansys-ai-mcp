@@ -1,0 +1,28 @@
+{
+  "manifest_version": "0.3",
+  "name": "ansys-ai",
+  "display_name": "ANSYS AI",
+  "version": "1.0.0",
+  "description": "Control ANSYS Workbench simulations and retrieve engineering results.",
+  "author": {
+    "name": "MIR FAHEEM MEHRAJ"
+  },
+  "server": {
+    "type": "python",
+    "entry_point": "server.py",
+    "mcp_config": {
+      "command": "python",
+      "args": [
+        "${__dirname}/server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "${__dirname}/server/lib"
+      }
+    }
+  },
+  "compatibility": {
+    "platforms": [
+      "win32"
+    ]
+  }
+}
